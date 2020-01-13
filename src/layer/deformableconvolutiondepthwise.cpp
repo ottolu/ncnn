@@ -19,8 +19,8 @@ int DeformableConvolutionDepthWise::load_param(const ParamDict& pd)
     num_output = pd.get(0, 0);
     kernel_w = pd.get(1, 0);
     kernel_h = pd.get(11, kernel_w);
-    //dilation_w = pd.get(2, 1);
-    //dilation_h = pd.get(12, dilation_w);
+    dilation_w = pd.get(2, 1);
+    dilation_h = pd.get(12, dilation_w);
     stride_w = pd.get(3, 1);
     stride_h = pd.get(13, stride_w);
     pad_left = pd.get(4, 0);
@@ -34,7 +34,7 @@ int DeformableConvolutionDepthWise::load_param(const ParamDict& pd)
     int8_scale_term = pd.get(8, 0);
     activation_type = pd.get(9, 0);
     activation_params = pd.get(10, Mat());
-    offset_data_size = pd.get(19, 0);
+    offset_data_size = pd.get(19, 10000);
 
     if (num_output % group != 0)
     {
@@ -186,9 +186,6 @@ int DeformableConvolutionDepthWise::forward(const Mat& bottom_blob, Mat& top_blo
     // float32
     top_blob.create(outw, outh, num_output, elemsize, opt.blob_allocator);
     if (top_blob.empty())
-        return -100;
-    offset_data.create(2 * kernel_h * kernel_w, outw, outh, elemsize, opt.blob_allocator);
-    if (offset_data.empty())
         return -100;
 
     // depth-wise

@@ -22,8 +22,12 @@ public:
     Layer* activation;
     std::vector<ncnn::Layer*> group_ops;
 
+    // buffer
+
     // packing
     Mat weight_data_pack4;
+    Mat tmp_data;
+    Mat offset_data1;
 };
 
 } // namespace ncnn

@@ -26,8 +26,8 @@ public:
     int num_output;
     int kernel_w;
     int kernel_h;
-    //int dilation_w;
-    //int dilation_h;
+    int dilation_w;
+    int dilation_h;
     int stride_w;
     int stride_h;
     int pad_left;// -233=SAME_UPPER -234=SAME_LOWER
@@ -51,7 +51,6 @@ public:
     Mat weight_data;
     Mat bias_data;
     Mat offset_data;
-    Mat tmp_data;
 
     Mat weight_data_int8_scales;
     Mat bottom_blob_int8_scales;

@@ -8,6 +8,11 @@
 #include "neon_activation.h"
 #endif // __ARM_NEON
 
+#include <stdio.h>
+#include <string.h>
+
+#include "benchmark.h"
+
 namespace ncnn {
 
 //#include "deformableconvolutiondepthwise_3x3.h"
@@ -210,7 +215,7 @@ int DeformableConvolutionDepthWise_arm::create_pipeline(const Option& opt)
     return 0;
 }
 
-int ConvolutionDepthWise_arm::destroy_pipeline(const Option& opt)
+int DeformableConvolutionDepthWise_arm::destroy_pipeline(const Option& opt)
 {
     if (activation)
     {
@@ -229,7 +234,7 @@ int ConvolutionDepthWise_arm::destroy_pipeline(const Option& opt)
     return 0;
 }
 
-int ConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top_blob, const Option& opt) const
+int DeformableConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top_blob, const Option& opt) const
 {
     // convolv with NxN kernel
     // value = value + bias
@@ -238,6 +243,8 @@ int ConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top_blob, con
     // {
     //     return forward_int8_arm(bottom_blob, top_blob, opt);
     // }
+
+    // printf("DeformableConvolutionDepthWise_arm gogogo\n\n");
 
     int w = bottom_blob.w;
     int h = bottom_blob.h;
@@ -292,12 +299,25 @@ int ConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top_blob, con
     top_blob.create(outw, outh, num_output / out_elempack, out_elemsize, out_elempack, opt.blob_allocator);
     if (top_blob.empty())
         return -100;
-    offset_data.create(2 * kernel_h * kernel_w * outw * outh, 1, opt.blob_allocator);
-    if (offset_data.empty())
+    
+    double start = ncnn::get_current_time();
+
+    Mat offset_data1 = offset_data;
+    offset_data1.create(2 * kernel_h * kernel_w * outw * outh, 1, out_elemsize, 1);
+    if (offset_data1.empty())
         return -100;
-    tmp_data.create(kernel_h * kernel_w * outw * outh, 1, opt.blob_allocator);
-    if (offset_data.empty())
+
+    Mat tmp_data1 = tmp_data;
+    tmp_data1.create(kernel_h * kernel_w * outw * outh, 1, out_elemsize, 1);
+    if (tmp_data1.empty())
         return -100;
+
+    double end = ncnn::get_current_time();
+    double time = end - start;
+
+    printf("create buffer: %f ms\n", time);
+
+    // printf("DeformableConvolutionDepthWise_arm: %d x %d x %d, %d x %d x %d\n\n", bottom_blob.c * 4, bottom_blob.h, bottom_blob.w, kernel_h, kernel_w, num_output);
 
     // depth-wise
     if (channels * elempack == group && group == num_output)
@@ -307,7 +327,25 @@ int ConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top_blob, con
         {
             if (kernel_w == 3 && kernel_h == 3 && dilation_w == 1 && dilation_h == 1 && stride_w == 1 && stride_h == 1)
             {
-                dfmconvdw3x3s1_pack4_neon(bottom_blob_bordered, top_blob, weight_data_pack4, bias_data, opt);
+                // printf("DeformableConvolutionDepthWise_arm 3x3s1pack4 kernel\n\n");
+
+                start = ncnn::get_current_time();
+                dfmconvdw3x3s1_pack4_neon(bottom_blob_bordered, top_blob, weight_data_pack4, offset_data1, tmp_data1, bias_data, opt);
+                end = ncnn::get_current_time();
+                time = end - start;
+                printf("dfmconvdw3x3s1_pack4_neon whole: %f ms\n", time);
+
+                if (activation)
+                {
+                    activation->forward_inplace(top_blob, opt);
+                }
+
+                return 0;
+            }
+            else if (kernel_w == 3 && kernel_h == 3 && dilation_w == 1 && dilation_h == 1 && stride_w == 2 && stride_h == 2)
+            {
+                // printf("DeformableConvolutionDepthWise_arm 3x3s2pack4 kernel todo\n\n");
+                dfmconvdw3x3s2_pack4_neon(bottom_blob_bordered, top_blob, weight_data_pack4, offset_data1, tmp_data1, bias_data, opt);
 
                 if (activation)
                 {
@@ -317,17 +355,6 @@ int ConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top_blob, con
                 return 0;
             }
 #if 0
-            else if (kernel_w == 3 && kernel_h == 3 && dilation_w == 1 && dilation_h == 1 && stride_w == 2 && stride_h == 2)
-            {
-                convdw3x3s2_pack4_neon(bottom_blob_bordered, top_blob, weight_data_pack4, bias_data, opt);
-
-                if (activation)
-                {
-                    activation->forward_inplace(top_blob, opt);
-                }
-
-                return 0;
-            }
             else if (kernel_w == 5 && kernel_h == 5 && dilation_w == 1 && dilation_h == 1 && stride_w == 1 && stride_h == 1)
             {
                 convdw5x5s1_pack4_neon(bottom_blob_bordered, top_blob, weight_data_pack4, bias_data, opt);
@@ -415,56 +442,60 @@ int ConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top_blob, con
         }
 #endif // __ARM_NEON
 
-#if 0
         if (elempack == 1)
         {
             if (kernel_w == 3 && kernel_h == 3 && dilation_w == 1 && dilation_h == 1 && stride_w == 1 && stride_h == 1)
             {
-                convdw3x3s1_neon(bottom_blob_bordered, top_blob, weight_data, bias_data, opt);
+                // printf("DeformableConvolutionDepthWise_arm 3x3s1pack1 kernel todo\n\n");
+                // convdw3x3s1_neon(bottom_blob_bordered, top_blob, weight_data, bias_data, opt);
 
-                if (activation)
-                {
-                    activation->forward_inplace(top_blob, opt);
-                }
+                // if (activation)
+                // {
+                //     activation->forward_inplace(top_blob, opt);
+                // }
 
                 return 0;
             }
             else if (kernel_w == 3 && kernel_h == 3 && dilation_w == 1 && dilation_h == 1 && stride_w == 2 && stride_h == 2)
             {
-                convdw3x3s2_neon(bottom_blob_bordered, top_blob, weight_data, bias_data, opt);
+                // printf("DeformableConvolutionDepthWise_arm 3x3s2pack1 kernel todo\n\n");
+                // convdw3x3s2_neon(bottom_blob_bordered, top_blob, weight_data, bias_data, opt);
 
-                if (activation)
-                {
-                    activation->forward_inplace(top_blob, opt);
-                }
+                // if (activation)
+                // {
+                //     activation->forward_inplace(top_blob, opt);
+                // }
 
                 return 0;
             }
             else if (kernel_w == 5 && kernel_h == 5 && dilation_w == 1 && dilation_h == 1 && stride_w == 1 && stride_h == 1)
             {
-                convdw5x5s1_neon(bottom_blob_bordered, top_blob, weight_data, bias_data, opt);
+                // printf("DeformableConvolutionDepthWise_arm 5x5s1pack1 kernel todo\n\n");
+                // convdw5x5s1_neon(bottom_blob_bordered, top_blob, weight_data, bias_data, opt);
 
-                if (activation)
-                {
-                    activation->forward_inplace(top_blob, opt);
-                }
+                // if (activation)
+                // {
+                //     activation->forward_inplace(top_blob, opt);
+                // }
 
                 return 0;
             }
             else if (kernel_w == 5 && kernel_h == 5 && dilation_w == 1 && dilation_h == 1 && stride_w == 2 && stride_h == 2)
             {
-                convdw5x5s2_neon(bottom_blob_bordered, top_blob, weight_data, bias_data, opt);
+                // printf("DeformableConvolutionDepthWise_arm 5x5s2pack1 kernel todo\n\n");
+                // convdw5x5s2_neon(bottom_blob_bordered, top_blob, weight_data, bias_data, opt);
 
-                if (activation)
-                {
-                    activation->forward_inplace(top_blob, opt);
-                }
+                // if (activation)
+                // {
+                //     activation->forward_inplace(top_blob, opt);
+                // }
 
                 return 0;
             }
         }
-#endif
     }
+
+    // printf("DeformableConvolutionDepthWise_arm not kernel\n\n");
     return -100;
 
     // group convolution
