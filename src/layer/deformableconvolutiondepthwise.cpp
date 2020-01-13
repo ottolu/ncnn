@@ -34,7 +34,7 @@ int DeformableConvolutionDepthWise::load_param(const ParamDict& pd)
     int8_scale_term = pd.get(8, 0);
     activation_type = pd.get(9, 0);
     activation_params = pd.get(10, Mat());
-    offset_data_size = pd.get(19, 10000);
+    offset_data_size = pd.get(19, 0);
 
     if (num_output % group != 0)
     {
@@ -52,13 +52,15 @@ int DeformableConvolutionDepthWise::load_model(const ModelBin& mb)
     if (weight_data.empty())
         return -100;
 
-    //int out_h = (h + 2 * pad_top) - 3 + 1;
-    //int out_w = (w + 2 * pad_left) - 3 + 1;
-    //int offset_c = 2 * kernel_h * kernel_w;
-    //int offset_data_size = offset_c * out_h * out_w;
     offset_data = mb.load(offset_data_size, 0);
     if (offset_data.empty())
         return -100;
+
+    float offset_range = 3.0;
+    float* offset_ptr = (float*)offset_data;
+    for (int i = 0; i < offset_data_size; ++i) {
+        offset_ptr[i] = rand() * 1.0f / RAND_MAX * offset_range * 2.0 - offset_range;
+    }
 
     if (bias_term)
     {

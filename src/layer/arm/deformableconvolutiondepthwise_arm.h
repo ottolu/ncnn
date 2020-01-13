@@ -27,7 +27,6 @@ public:
     // packing
     Mat weight_data_pack4;
     Mat tmp_data;
-    Mat offset_data1;
 };
 
 } // namespace ncnn

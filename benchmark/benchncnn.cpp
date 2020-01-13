@@ -233,7 +233,8 @@ int main(int argc, char** argv)
     //benchmark("mobilenet_int8", ncnn::Mat(224, 224, 3), opt);
     }
 
-    benchmark("mobilenet_v2_dfmconv", ncnn::Mat(224, 224, 3), opt);
+    benchmark("mobilenet_v2_dfmconv_c2toc5", ncnn::Mat(224, 224, 3), opt);
+    benchmark("mobilenet_v2_dfmconv_c3toc5", ncnn::Mat(224, 224, 3), opt);
     benchmark("mobilenet_v2", ncnn::Mat(224, 224, 3), opt);
 
 // #if NCNN_VULKAN
