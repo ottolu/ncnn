@@ -13,7 +13,7 @@ using namespace ncnn;
 
 // }
 
-void dfmconvdw3x3s1_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat& kernel, const Mat& offset, Mat& ofs_idx2, const Mat& _bias, const Option& opt)
+void dfmconvdw3x3s1_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat& kernel, const Mat& offset_mat, Mat& ofs_idx2, const Mat& _bias, const Option& opt)
 {
     int w = bottom_blob.w;
 
@@ -41,11 +41,12 @@ void dfmconvdw3x3s1_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat&
 }
 
     int *ofs_idx = (int*) ofs_idx2;
+    float *offset = const_cast<float*>((const float*)offset_mat);
 
     #pragma omp parallel for num_threads(opt.num_threads)
     for (int oh = 0; oh < outh; oh++)
     {
-        float* ofsptr = (float*)offset + oh * outw * kernel_size * 2;
+        float* ofsptr = offset + oh * outw * kernel_size * 2;
         int* ofs_idx_ptr = (int*)ofs_idx + oh * outw * kernel_size;
 
         for (int ow = 0; ow < outw; ow++)
@@ -136,7 +137,7 @@ void dfmconvdw3x3s1_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat&
     }
 }
 
-void dfmconvdw3x3s2_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat& kernel, const Mat& offset, Mat& ofs_idx2, const Mat& _bias, const Option& opt)
+void dfmconvdw3x3s2_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat& kernel, const Mat& offset_mat, Mat& ofs_idx2, const Mat& _bias, const Option& opt)
 {
     int w = bottom_blob.w;
 
@@ -164,11 +165,12 @@ void dfmconvdw3x3s2_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat&
 }
 
     int *ofs_idx = (int*) ofs_idx2;
+    float *offset = const_cast<float*>((const float*)offset_mat);
 
     #pragma omp parallel for num_threads(opt.num_threads)
     for (int oh = 0; oh < outh; oh++)
     {
-        float* ofsptr = (float*)offset + oh * outw * kernel_size * 2;
+        float* ofsptr = offset + oh * outw * kernel_size * 2;
         int* ofs_idx_ptr = (int*)ofs_idx + oh * outw * kernel_size;
 
         for (int ow = 0; ow < outw; ow++)
