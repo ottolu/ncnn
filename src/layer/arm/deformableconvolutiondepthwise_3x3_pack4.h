@@ -89,14 +89,14 @@ void dfmconvdw3x3s1_bilinear_pack4_neon(const Mat& bottom_blob, Mat& top_blob, c
     float32x4_t vdata[4];\
     vdata[0] = vld1q_f32(input + input_data_idx);\
     vdata[1] = vld1q_f32(input + input_data_idx + 4);\
-    vdata[2] = vld1q_f32(input + input_data_idx + width * 4);\
-    vdata[3] = vld1q_f32(input + input_data_idx + width * 4 + 4);\
+    vdata[2] = vld1q_f32(input + input_data_idx + in_w * 4);\
+    vdata[3] = vld1q_f32(input + input_data_idx + in_w * 4 + 4);\
     float32x4_t vtmp;\
     vtmp = vmulq_laneq_f32(vdata[0], vcoeff, 0);\
     vtmp = vmlaq_laneq_f32(vtmp, vdata[1], vcoeff, 1);\
     vtmp = vmlaq_laneq_f32(vtmp, vdata[2], vcoeff, 2);\
     vtmp = vmlaq_laneq_f32(vtmp, vdata[3], vcoeff, 3);\
-    vdst = vmlaq_f32(vdst, vtmp, vflt);\
+    _dst = vmlaq_f32(_dst, vtmp, vflt);\
 }
 
     #pragma omp parallel for num_threads(opt.num_threads)
@@ -225,14 +225,14 @@ void dfmconvdw3x3s2_bilinear_pack4_neon(const Mat& bottom_blob, Mat& top_blob, c
     float32x4_t vdata[4];\
     vdata[0] = vld1q_f32(input + input_data_idx);\
     vdata[1] = vld1q_f32(input + input_data_idx + 4);\
-    vdata[2] = vld1q_f32(input + input_data_idx + width * 4);\
-    vdata[3] = vld1q_f32(input + input_data_idx + width * 4 + 4);\
+    vdata[2] = vld1q_f32(input + input_data_idx + in_w * 4);\
+    vdata[3] = vld1q_f32(input + input_data_idx + in_w * 4 + 4);\
     float32x4_t vtmp;\
     vtmp = vmulq_laneq_f32(vdata[0], vcoeff, 0);\
     vtmp = vmlaq_laneq_f32(vtmp, vdata[1], vcoeff, 1);\
     vtmp = vmlaq_laneq_f32(vtmp, vdata[2], vcoeff, 2);\
     vtmp = vmlaq_laneq_f32(vtmp, vdata[3], vcoeff, 3);\
-    vdst = vmlaq_f32(vdst, vtmp, vflt);\
+    _dst = vmlaq_f32(_dst, vtmp, vflt);\
 }
 
     #pragma omp parallel for num_threads(opt.num_threads)
