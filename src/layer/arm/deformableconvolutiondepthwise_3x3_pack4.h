@@ -48,7 +48,7 @@ void dfmconvdw3x3s1_bilinear_pack4_neon(const Mat& bottom_blob, Mat& top_blob, c
     ofs_idx_ptr_flt[k_idx * 4 + 1] = h_bottom_dist * w_left_dist; \
     ofs_idx_ptr_flt[k_idx * 4 + 2] = h_top_dist * w_right_dist; \
     ofs_idx_ptr_flt[k_idx * 4 + 3] = h_top_dist * w_left_dist; \
-    ofs_idx_ptr[36 + k_idx] = (pos_h * in_w + pos_w) * 4; \
+    ofs_idx_ptr[36 + k_idx] = (pos_h_ceil * in_w + pos_w_ceil) * 4; \
 }
 
     int *ofs_idx = (int*) ofs_idx2;
@@ -183,7 +183,7 @@ void dfmconvdw3x3s2_bilinear_pack4_neon(const Mat& bottom_blob, Mat& top_blob, c
     ofs_idx_ptr_flt[k_idx * 4 + 1] = h_bottom_dist * w_left_dist; \
     ofs_idx_ptr_flt[k_idx * 4 + 2] = h_top_dist * w_right_dist; \
     ofs_idx_ptr_flt[k_idx * 4 + 3] = h_top_dist * w_left_dist; \
-    ofs_idx_ptr[36 + k_idx] = (pos_h * in_w + pos_w) * 4; \
+    ofs_idx_ptr[36 + k_idx] = (pos_h_ceil * in_w + pos_w_ceil) * 4; \
 }
 
     int *ofs_idx = (int*) ofs_idx2;
@@ -217,7 +217,6 @@ void dfmconvdw3x3s2_bilinear_pack4_neon(const Mat& bottom_blob, Mat& top_blob, c
     }
 
 #undef CALCULATE_OFFSET
-
 
 #define CALC_ONE_OUTPUT(k_idx, vflt) {\
     int input_data_idx = ofs_idx_ptr[36 + k_idx];\
