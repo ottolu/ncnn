@@ -13,6 +13,278 @@ using namespace ncnn;
 
 // }
 
+
+void dfmconvdw3x3s1_bilinear_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat& kernel, const Mat& offset_mat, Mat& ofs_idx2, const Mat& _bias, const Option& opt)
+{
+    int w = bottom_blob.w;
+
+    int in_w = bottom_blob.w;
+    int in_h = bottom_blob.h;
+    int outw = top_blob.w;
+    int outh = top_blob.h;
+
+    const int group = bottom_blob.c;
+
+    const float* bias = _bias;
+
+    const int kernel_size = 9;
+
+#define CALCULATE_OFFSET(k_idx, kh, kw) {\
+    float ofs_h = ofsptr[k_idx * 2]; \
+    float ofs_w = ofsptr[k_idx * 2 + 1]; \
+    float pos_h = oh + ofs_h + kh; \
+    float pos_w = ow + ofs_w + kw; \
+    int pos_h_ceil = (int)ceil(pos_h); \
+    int pos_w_ceil = (int)ceil(pos_w); \
+    float h_bottom_dist = pos_h_ceil - pos_h; \
+    float h_top_dist = 1.0f - h_bottom_dist; \
+    float w_right_dist = pos_w_ceil - pos_w; \
+    float w_left_dist = 1.0f - w_right_dist; \
+    if (pos_h_ceil <= 0) { pos_h_ceil = 1; h_top_dist = 0.0f; h_bottom_dist = 1.0f; }\
+    else if (pos_h_ceil > in_h - 1) { pos_h_ceil = in_h - 1; h_top_dist = 1.0f; h_bottom_dist = 0.0f; } \
+    if (pos_w_ceil <= 0) { pos_w_ceil = 1; w_left_dist = 0.0f; w_right_dist = 1.0f; } \
+    else if (pos_w_ceil >= in_w - 1) { pos_w_ceil = in_w - 1; w_left_dist = 1.0f; w_right_dist = 0.0f; } \
+    ofs_idx_ptr_flt[k_idx * 4] = h_bottom_dist * w_right_dist; \
+    ofs_idx_ptr_flt[k_idx * 4 + 1] = h_bottom_dist * w_left_dist; \
+    ofs_idx_ptr_flt[k_idx * 4 + 2] = h_top_dist * w_right_dist; \
+    ofs_idx_ptr_flt[k_idx * 4 + 3] = h_top_dist * w_left_dist; \
+    ofs_idx_ptr[36 + k_idx] = (pos_h * in_w + pos_w) * 4; \
+}
+
+    int *ofs_idx = (int*) ofs_idx2;
+    float *offset = const_cast<float*>((const float*)offset_mat);
+
+    #pragma omp parallel for num_threads(opt.num_threads)
+    for (int oh = 0; oh < outh; oh++)
+    {
+        float* ofsptr = offset + oh * outw * kernel_size * 2;
+        int* ofs_idx_ptr = (int*)ofs_idx + oh * outw * kernel_size;
+
+        for (int ow = 0; ow < outw; ow++)
+        {
+            float *ofs_idx_ptr_flt = (float*)ofs_idx_ptr;
+
+            CALCULATE_OFFSET(0, 0, 0);
+            CALCULATE_OFFSET(1, 0, 1);
+            CALCULATE_OFFSET(2, 0, 2);
+
+            CALCULATE_OFFSET(3, 1, 0);
+            CALCULATE_OFFSET(4, 1, 1);
+            CALCULATE_OFFSET(5, 1, 2);
+
+            CALCULATE_OFFSET(6, 2, 0);
+            CALCULATE_OFFSET(7, 2, 1);
+            CALCULATE_OFFSET(8, 2, 2);
+
+            ofsptr += kernel_size * 2;
+            ofs_idx_ptr += 48; // kernel_size * 5;
+        }
+    }
+
+#undef CALCULATE_OFFSET
+
+#define CALC_ONE_OUTPUT(k_idx, vflt) {\
+    int input_data_idx = ofs_idx_ptr[36 + k_idx];\
+    float32x4_t vcoeff = vld1q_f32(ofs_idx_ptr_flt + k_idx * 4);\
+    float32x4_t vdata[4];\
+    vdata[0] = vld1q_f32(input + input_data_idx);\
+    vdata[1] = vld1q_f32(input + input_data_idx + 4);\
+    vdata[2] = vld1q_f32(input + input_data_idx + width * 4);\
+    vdata[3] = vld1q_f32(input + input_data_idx + width * 4 + 4);\
+    float32x4_t vtmp;\
+    vtmp = vmulq_laneq_f32(vdata[0], vcoeff, 0);\
+    vtmp = vmlaq_laneq_f32(vtmp, vdata[1], vcoeff, 1);\
+    vtmp = vmlaq_laneq_f32(vtmp, vdata[2], vcoeff, 2);\
+    vtmp = vmlaq_laneq_f32(vtmp, vdata[3], vcoeff, 3);\
+    vdst = vmlaq_f32(vdst, vtmp, vflt);\
+}
+
+    #pragma omp parallel for num_threads(opt.num_threads)
+    for (int g=0; g<group; g++)
+    {
+        Mat out = top_blob.channel(g);
+        const Mat img0 = bottom_blob.channel(g);
+        const float* k0 = kernel.row(g);
+
+        float32x4_t _bias0 = bias ? vld1q_f32((const float*)bias + g * 4) : vdupq_n_f32(0.f);
+
+        const float* input = (const float*) img0;
+
+        float32x4_t _k00 = vld1q_f32(k0);
+        float32x4_t _k01 = vld1q_f32(k0+4);
+        float32x4_t _k02 = vld1q_f32(k0+8);
+        float32x4_t _k10 = vld1q_f32(k0+12);
+        float32x4_t _k11 = vld1q_f32(k0+16);
+        float32x4_t _k12 = vld1q_f32(k0+20);
+        float32x4_t _k20 = vld1q_f32(k0+24);
+        float32x4_t _k21 = vld1q_f32(k0+28);
+        float32x4_t _k22 = vld1q_f32(k0+32);
+
+        int* ofs_idx_ptr = (int*)ofs_idx;
+        for (int oh = 0; oh < outh; oh++)
+        {
+            float* output = out.row(oh);
+            for (int ow = 0; ow < outw; ow++)
+            {
+                float32x4_t _dst = _bias0;
+                float *ofs_idx_ptr_flt = (float*)ofs_idx_ptr;
+
+                CALC_ONE_OUTPUT(0, _k00);
+                CALC_ONE_OUTPUT(1, _k01);
+                CALC_ONE_OUTPUT(2, _k02);
+                CALC_ONE_OUTPUT(3, _k10);
+                CALC_ONE_OUTPUT(4, _k11);
+                CALC_ONE_OUTPUT(5, _k12);
+                CALC_ONE_OUTPUT(6, _k20);
+                CALC_ONE_OUTPUT(7, _k21);
+                CALC_ONE_OUTPUT(8, _k22);
+
+                vst1q_f32(output + ow * 4, _dst);
+
+                ofs_idx_ptr += 48; // kernel_size * 5;
+            }
+#undef MLA_RESULT 
+        }
+    }
+}
+
+
+void dfmconvdw3x3s2_bilinear_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat& kernel, const Mat& offset_mat, Mat& ofs_idx2, const Mat& _bias, const Option& opt)
+{
+    int w = bottom_blob.w;
+
+    int in_w = bottom_blob.w;
+    int in_h = bottom_blob.h;
+    int outw = top_blob.w;
+    int outh = top_blob.h;
+
+    const int group = bottom_blob.c;
+
+    const float* bias = _bias;
+
+    const int kernel_size = 9;
+
+#define CALCULATE_OFFSET(k_idx, kh, kw) {\
+    float ofs_h = ofsptr[k_idx * 2]; \
+    float ofs_w = ofsptr[k_idx * 2 + 1]; \
+    float pos_h = oh * 2 + ofs_h + kh; \
+    float pos_w = ow * 2 + ofs_w + kw; \
+    int pos_h_ceil = (int)ceil(pos_h); \
+    int pos_w_ceil = (int)ceil(pos_w); \
+    float h_bottom_dist = pos_h_ceil - pos_h; \
+    float h_top_dist = 1.0f - h_bottom_dist; \
+    float w_right_dist = pos_w_ceil - pos_w; \
+    float w_left_dist = 1.0f - w_right_dist; \
+    if (pos_h_ceil <= 0) { pos_h_ceil = 1; h_top_dist = 0.0f; h_bottom_dist = 1.0f; }\
+    else if (pos_h_ceil > in_h - 1) { pos_h_ceil = in_h - 1; h_top_dist = 1.0f; h_bottom_dist = 0.0f; } \
+    if (pos_w_ceil <= 0) { pos_w_ceil = 1; w_left_dist = 0.0f; w_right_dist = 1.0f; } \
+    else if (pos_w_ceil >= in_w - 1) { pos_w_ceil = in_w - 1; w_left_dist = 1.0f; w_right_dist = 0.0f; } \
+    ofs_idx_ptr_flt[k_idx * 4] = h_bottom_dist * w_right_dist; \
+    ofs_idx_ptr_flt[k_idx * 4 + 1] = h_bottom_dist * w_left_dist; \
+    ofs_idx_ptr_flt[k_idx * 4 + 2] = h_top_dist * w_right_dist; \
+    ofs_idx_ptr_flt[k_idx * 4 + 3] = h_top_dist * w_left_dist; \
+    ofs_idx_ptr[36 + k_idx] = (pos_h * in_w + pos_w) * 4; \
+}
+
+    int *ofs_idx = (int*) ofs_idx2;
+    float *offset = const_cast<float*>((const float*)offset_mat);
+
+    #pragma omp parallel for num_threads(opt.num_threads)
+    for (int oh = 0; oh < outh; oh++)
+    {
+        float* ofsptr = offset + oh * outw * kernel_size * 2;
+        int* ofs_idx_ptr = (int*)ofs_idx + oh * outw * kernel_size;
+
+        for (int ow = 0; ow < outw; ow++)
+        {
+            float *ofs_idx_ptr_flt = (float*)ofs_idx_ptr;
+
+            CALCULATE_OFFSET(0, 0, 0);
+            CALCULATE_OFFSET(1, 0, 1);
+            CALCULATE_OFFSET(2, 0, 2);
+
+            CALCULATE_OFFSET(3, 1, 0);
+            CALCULATE_OFFSET(4, 1, 1);
+            CALCULATE_OFFSET(5, 1, 2);
+
+            CALCULATE_OFFSET(6, 2, 0);
+            CALCULATE_OFFSET(7, 2, 1);
+            CALCULATE_OFFSET(8, 2, 2);
+
+            ofsptr += kernel_size * 2;
+            ofs_idx_ptr += 48; // kernel_size * 5;
+        }
+    }
+
+#undef CALCULATE_OFFSET
+
+
+#define CALC_ONE_OUTPUT(k_idx, vflt) {\
+    int input_data_idx = ofs_idx_ptr[36 + k_idx];\
+    float32x4_t vcoeff = vld1q_f32(ofs_idx_ptr_flt + k_idx * 4);\
+    float32x4_t vdata[4];\
+    vdata[0] = vld1q_f32(input + input_data_idx);\
+    vdata[1] = vld1q_f32(input + input_data_idx + 4);\
+    vdata[2] = vld1q_f32(input + input_data_idx + width * 4);\
+    vdata[3] = vld1q_f32(input + input_data_idx + width * 4 + 4);\
+    float32x4_t vtmp;\
+    vtmp = vmulq_laneq_f32(vdata[0], vcoeff, 0);\
+    vtmp = vmlaq_laneq_f32(vtmp, vdata[1], vcoeff, 1);\
+    vtmp = vmlaq_laneq_f32(vtmp, vdata[2], vcoeff, 2);\
+    vtmp = vmlaq_laneq_f32(vtmp, vdata[3], vcoeff, 3);\
+    vdst = vmlaq_f32(vdst, vtmp, vflt);\
+}
+
+    #pragma omp parallel for num_threads(opt.num_threads)
+    for (int g=0; g<group; g++)
+    {
+        Mat out = top_blob.channel(g);
+        const Mat img0 = bottom_blob.channel(g);
+        const float* k0 = kernel.row(g);
+
+        float32x4_t _bias0 = bias ? vld1q_f32((const float*)bias + g * 4) : vdupq_n_f32(0.f);
+
+        const float* input = (const float*) img0;
+        //float* output = (float*)out;
+
+        float32x4_t _k00 = vld1q_f32(k0);
+        float32x4_t _k01 = vld1q_f32(k0+4);
+        float32x4_t _k02 = vld1q_f32(k0+8);
+        float32x4_t _k10 = vld1q_f32(k0+12);
+        float32x4_t _k11 = vld1q_f32(k0+16);
+        float32x4_t _k12 = vld1q_f32(k0+20);
+        float32x4_t _k20 = vld1q_f32(k0+24);
+        float32x4_t _k21 = vld1q_f32(k0+28);
+        float32x4_t _k22 = vld1q_f32(k0+32);
+
+        int* ofs_idx_ptr = (int*)ofs_idx;
+        for (int oh = 0; oh < outh; oh++)
+        {
+            float* output = out.row(oh);
+            for (int ow = 0; ow < outw; ow++)
+            {
+                float32x4_t _dst = _bias0;
+                float *ofs_idx_ptr_flt = (float*)ofs_idx_ptr;
+
+                CALC_ONE_OUTPUT(0, _k00);
+                CALC_ONE_OUTPUT(1, _k01);
+                CALC_ONE_OUTPUT(2, _k02);
+                CALC_ONE_OUTPUT(3, _k10);
+                CALC_ONE_OUTPUT(4, _k11);
+                CALC_ONE_OUTPUT(5, _k12);
+                CALC_ONE_OUTPUT(6, _k20);
+                CALC_ONE_OUTPUT(7, _k21);
+                CALC_ONE_OUTPUT(8, _k22);
+
+                vst1q_f32(output + ow * 4, _dst);
+
+                ofs_idx_ptr += 48; // kernel_size * 5;
+            }
+#undef MLA_RESULT 
+        }
+    }
+}
+
 void dfmconvdw3x3s1_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat& kernel, const Mat& offset_mat, Mat& ofs_idx2, const Mat& _bias, const Option& opt)
 {
     int w = bottom_blob.w;
@@ -34,9 +306,9 @@ void dfmconvdw3x3s1_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat&
     int pos_h = oh + (int)round(ofs_h) + kh; \
     int pos_w = ow + (int)round(ofs_w) + kw; \
     if (pos_h < 0) pos_h = 0; \
-    if (pos_h >= in_h) pos_h = in_h - 1; \
+    else if (pos_h >= in_h) pos_h = in_h - 1; \
     if (pos_w < 0) pos_w = 0; \
-    if (pos_w >= in_w) pos_w = in_w - 1; \
+    else if (pos_w >= in_w) pos_w = in_w - 1; \
     ofs_idx_ptr[k_idx] = (pos_h * in_w + pos_w) * 4; \
 }
 
@@ -158,9 +430,9 @@ void dfmconvdw3x3s2_pack4_neon(const Mat& bottom_blob, Mat& top_blob, const Mat&
     int pos_h = oh * 2 + (int)round(ofs_h) + kh; \
     int pos_w = ow * 2 + (int)round(ofs_w) + kw; \
     if (pos_h < 0) pos_h = 0; \
-    if (pos_h >= in_h) pos_h = in_h - 1; \
+    else if (pos_h >= in_h) pos_h = in_h - 1; \
     if (pos_w < 0) pos_w = 0; \
-    if (pos_w >= in_w) pos_w = in_w - 1; \
+    else if (pos_w >= in_w) pos_w = in_w - 1; \
     ofs_idx_ptr[k_idx] = (pos_h * in_w + pos_w) * 4; \
 }
 

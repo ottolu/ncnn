@@ -316,10 +316,19 @@ int DeformableConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top
     // if (offset_data1.empty())
     //     return -100;
 
+//#define OFFSET_INT
+#ifdef OFFSET_INT
     Mat tmp_data1 = tmp_data;
     tmp_data1.create(kernel_h * kernel_w * outw * outh, 1, out_elemsize, 1, opt.blob_allocator);
     if (tmp_data1.empty())
         return -100;
+#else
+    Mat tmp_data1 = tmp_data;
+    // tmp buffer for storage of offset index and interpolation temp values
+    tmp_data1.create(kernel_h * kernel_w * outw * outh, 1 + 4 + 1, out_elemsize, 1, opt.blob_allocator);
+    if (tmp_data1.empty())
+        return -100;
+#endif
 
     // double end = ncnn::get_current_time();
     // double time = end - start;
@@ -336,6 +345,7 @@ int DeformableConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top
         {
             if (kernel_w == 3 && kernel_h == 3 && dilation_w == 1 && dilation_h == 1 && stride_w == 1 && stride_h == 1)
             {
+#ifdef OFFSET_INT
                 // printf("DeformableConvolutionDepthWise_arm 3x3s1pack4 kernel\n\n");
 
                 // start = ncnn::get_current_time();
@@ -343,7 +353,9 @@ int DeformableConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top
                 // end = ncnn::get_current_time();
                 // time = end - start;
                 // printf("dfmconvdw3x3s1_pack4_neon whole: %f ms\n", time);
-
+#else
+                dfmconvdw3x3s1_bilinear_pack4_neon(bottom_blob_bordered, top_blob, weight_data_pack4, offset_data, tmp_data1, bias_data, opt);
+#endif
                 if (activation)
                 {
                     activation->forward_inplace(top_blob, opt);
@@ -353,10 +365,13 @@ int DeformableConvolutionDepthWise_arm::forward(const Mat& bottom_blob, Mat& top
             }
             else if (kernel_w == 3 && kernel_h == 3 && dilation_w == 1 && dilation_h == 1 && stride_w == 2 && stride_h == 2)
             {
+#ifdef OFFSET_INT
                 // printf("DeformableConvolutionDepthWise_arm 3x3s2pack4 kernel\n\n");
 
                 dfmconvdw3x3s2_pack4_neon(bottom_blob_bordered, top_blob, weight_data_pack4, offset_data, tmp_data1, bias_data, opt);
-
+#else
+                dfmconvdw3x3s2_bilinear_pack4_neon(bottom_blob_bordered, top_blob, weight_data_pack4, offset_data, tmp_data1, bias_data, opt);
+#endif
                 if (activation)
                 {
                     activation->forward_inplace(top_blob, opt);
