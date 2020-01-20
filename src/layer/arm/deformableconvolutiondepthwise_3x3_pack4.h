@@ -87,7 +87,7 @@ void dfmconvdw3x3s1_bilinear_pack4_neon(const Mat& bottom_blob, Mat& top_blob, c
     int input_data_idx = ofs_idx_ptr[36 + k_idx];\
     float32x4_t vcoeff = vld1q_f32(ofs_idx_ptr_flt + k_idx * 4);\
     float32x4_t vdata[4];\
-    vdata[0] = vld1q_f32(input + input_data_idx - in_w * 4 - 4;\
+    vdata[0] = vld1q_f32(input + input_data_idx - in_w * 4 - 4);\
     vdata[1] = vld1q_f32(input + input_data_idx - in_w * 4);\
     vdata[2] = vld1q_f32(input + input_data_idx - 4);\
     vdata[3] = vld1q_f32(input + input_data_idx);\
@@ -223,7 +223,7 @@ void dfmconvdw3x3s2_bilinear_pack4_neon(const Mat& bottom_blob, Mat& top_blob, c
     int input_data_idx = ofs_idx_ptr[36 + k_idx];\
     float32x4_t vcoeff = vld1q_f32(ofs_idx_ptr_flt + k_idx * 4);\
     float32x4_t vdata[4];\
-    vdata[0] = vld1q_f32(input + input_data_idx - in_w * 4 - 4;\
+    vdata[0] = vld1q_f32(input + input_data_idx - in_w * 4 - 4);\
     vdata[1] = vld1q_f32(input + input_data_idx - in_w * 4);\
     vdata[2] = vld1q_f32(input + input_data_idx - 4);\
     vdata[3] = vld1q_f32(input + input_data_idx);\
